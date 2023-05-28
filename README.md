@@ -4,7 +4,6 @@
 This web app is designed to fetch data from YouTube using their YouTube's Data API v3 based on user input for a channel username. The fetched data is stored in my personal MongoDB Atlas Database and provides facilities for users to migrate the channel data to their local MySQL database. The project also includes custom-made queries for basic data analysis and visualization using Streamlit.
 
 ## Prerequisites
-
 Before you begin, you will need to have a few tools and libraries installed on your machine:
 * Python 3.7 or higher
     [Note: Streamlit only supports .py files as of now. So, notebook(.ipynb) files are not recommended]

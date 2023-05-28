@@ -5,8 +5,8 @@ pymongo==4.3.3
 isodate==0.6.1
 streamlit==1.22.0
 wordcloud==1.8.2.2
-matplotlib==3.6.33
-mysql.connector==8.0.33
+matplotlib==3.6.3
+mysql-connector-python==8.0.33
 streamlit_extras==0.2.7
 streamlit_lottie==0.0.3
 google-api-python-client==2.87.0

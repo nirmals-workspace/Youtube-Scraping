@@ -11,6 +11,7 @@ from pymongo import MongoClient
 from datetime import datetime
 import plotly.express as px
 import streamlit as st
+import mysql.connector
 import altair as alt
 import pandas as pd
 import requests
@@ -424,6 +425,353 @@ def fetch_document(_collection, channel_name):
 def fetch_channel_names(_collection):
     channel_names = _collection.distinct("Channel_Details.Channel_Name")
     return channel_names
+
+def create_channels_table(cursor):
+    create_channels_table_query = """
+        CREATE TABLE IF NOT EXISTS Channels (
+            channel_id VARCHAR(255) PRIMARY KEY,
+            channel_name VARCHAR(255),
+            subscription_count INT,
+            channel_views INT,
+            channel_description MEDIUMTEXT,
+            channel_status VARCHAR(255)
+        )
+    """
+    cursor.execute(create_channels_table_query)
+
+def create_playlists_table(cursor):
+    create_playlists_table_query = """
+        CREATE TABLE IF NOT EXISTS Playlists (
+            channel_id VARCHAR(255),
+            playlist_id VARCHAR(255),
+            playlist_name VARCHAR(255),
+            PRIMARY KEY (channel_id, playlist_id),
+            FOREIGN KEY (channel_id) REFERENCES Channels(channel_id)
+        )
+    """
+    cursor.execute(create_playlists_table_query)
+
+def create_videos_table(cursor):
+    create_videos_table_query = """
+        CREATE TABLE IF NOT EXISTS Videos (
+            video_order VARCHAR(10),
+            channel_id VARCHAR(255),
+            playlist_id VARCHAR(255),
+            video_id VARCHAR(255) PRIMARY KEY,
+            video_name VARCHAR(255),
+            video_description MEDIUMTEXT,
+            published_at DATETIME,
+            view_count INT,
+            like_count INT,
+            dislike_count INT,
+            favorite_count INT,
+            comment_count INT,
+            duration VARCHAR(10),
+            thumbnail MEDIUMTEXT,
+            caption_status VARCHAR(50),
+            FOREIGN KEY (channel_id) REFERENCES Channels(channel_id),
+            FOREIGN KEY (channel_id, playlist_id) REFERENCES Playlists(channel_id, playlist_id)
+        )
+    """
+    cursor.execute(create_videos_table_query)
+
+def create_comments_table(cursor):
+    create_comments_table_query = """
+        CREATE TABLE IF NOT EXISTS Comments (
+            channel_id VARCHAR(255),
+            playlist_id VARCHAR(255),
+            video_id VARCHAR(255),
+            comment_id VARCHAR(255) PRIMARY KEY,
+            comment_text LONGTEXT,
+            comment_author VARCHAR(255),
+            comment_published_at DATETIME,
+            FOREIGN KEY (channel_id) REFERENCES Channels(channel_id),
+            FOREIGN KEY (channel_id, playlist_id) REFERENCES Playlists(channel_id, playlist_id),
+            FOREIGN KEY (video_id) REFERENCES Videos(video_id)
+        )
+    """
+    cursor.execute(create_comments_table_query)
+
+def migrate_data(conn, cursor, document):
+    
+    if document['Video_Details'] == {}:
+        st.error("Channel has no videos and can't be migrated")
+        return None
+    else:
+        
+        cursor.execute("CREATE DATABASE IF NOT EXISTS youtube_db")
+        cursor.execute("USE youtube_db")
+        
+        create_channels_table(cursor)
+        create_playlists_table(cursor)
+        create_videos_table(cursor)
+        create_comments_table(cursor)
+        
+        channel_id = document["Channel_Details"]["Channel_Id"]
+        channel_name = document["Channel_Details"]["Channel_Name"]
+        subscription_count = document["Channel_Details"]["Subscription_Count"]
+        channel_views = document["Channel_Details"]["Channel_Views"]
+        channel_description = document["Channel_Details"]["Channel_Description"]
+        channel_status = document["Channel_Details"]["Channel_Status"]
+
+        insert_channel_query = """
+            INSERT IGNORE INTO Channels (
+                channel_id, channel_name, subscription_count,
+                channel_views, channel_description, channel_status
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        channel_data = (channel_id, channel_name, subscription_count,
+                        channel_views, channel_description, channel_status)
+        cursor.execute(insert_channel_query, channel_data)
+
+        video_details = document["Video_Details"]
+
+        for video_key, video_values in video_details.items():
+            
+            playlist_id = video_values["Playlist_Id"]
+            playlist_name = video_values["Playlist_Name"]
+
+            # Check if playlist with the same channel_id and playlist_id exists
+            select_playlist_query = """
+                SELECT * FROM Playlists
+                WHERE channel_id = %s AND playlist_id = %s
+            """
+            cursor.execute(select_playlist_query, (channel_id, playlist_id))
+            existing_playlist = cursor.fetchone()
+
+            if not existing_playlist:
+                insert_playlist_query = """
+                    INSERT IGNORE INTO Playlists (channel_id, playlist_id, playlist_name)
+                    VALUES (%s, %s, %s)
+                """
+                playlist_data = (channel_id, playlist_id, playlist_name)
+                cursor.execute(insert_playlist_query, playlist_data)
+
+            video_order = video_key
+            video_id = video_values["Video_Id"]
+            video_name = video_values["Video_Name"]
+            video_description = video_values["Video_Description"]
+            published_at = video_values["PublishedAt"]
+            view_count = video_values["View_Count"]
+            like_count = video_values["Like_Count"]
+            dislike_count = video_values["Dislike_Count"]
+            favorite_count = video_values["Favorite_Count"]
+            comment_count = video_values["Comment_Count"]
+            duration = video_values["Duration"]
+            thumbnail = video_values["Thumbnail"]
+            caption_status = video_values["Caption_Status"]
+
+            insert_video_query = """
+                INSERT IGNORE INTO Videos (
+                    video_order, channel_id, playlist_id, video_id, video_name, video_description,
+                    published_at, view_count, like_count, dislike_count,
+                    favorite_count, comment_count, duration, thumbnail, caption_status
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            video_data = (video_order, channel_id, playlist_id, video_id, video_name, video_description,
+                          published_at, view_count, like_count, dislike_count,
+                          favorite_count, comment_count, duration, thumbnail, caption_status)
+            cursor.execute(insert_video_query, video_data)
+                                    
+            comments_data = video_values.get("Comments", {})
+            
+            for _, comment_details in comments_data.items():
+                
+                comment_id = comment_details["Comment_Id"]
+                comment_text = comment_details["Comment_Text"]
+                comment_author = comment_details["Comment_Author"]
+                comment_published_at = comment_details["Comment_PublishedAt"]
+
+                insert_comment_query = """
+                    INSERT IGNORE INTO Comments (
+                        channel_id, playlist_id, video_id, comment_id,
+                        comment_text, comment_author, comment_published_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """
+                comment_data = (
+                        channel_id, playlist_id, video_id, comment_id,
+                        comment_text, comment_author, comment_published_at
+                        )
+                cursor.execute(insert_comment_query, comment_data)
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        st.success("Data successfully migrated to MySQL")
+
+
+#  2.2 - Streamlit Part
+
+
+add_vertical_space(2)
+
+st.subheader('Migrate data from Atlas to MySQL')
+
+add_vertical_space(2)
+
+col2, col3, col4 = st.columns([4, 4, 6])
+
+user = col2.text_input("Enter your MySQL Username", value='root')
+password = col3.text_input("Enter Password", value='Rooting@7781', type='password')
+
+if "channel_names" not in st.session_state:
+    channel_names = fetch_channel_names(collection)
+    st.session_state["channel_names"] = channel_names
+    
+existing_channel_count = len(st.session_state["channel_names"])
+new_channel_count = collection.estimated_document_count()
+
+if existing_channel_count != new_channel_count:
+    existing_channels = set(st.session_state["channel_names"])
+    new_channel_names = [name for name in fetch_channel_names(collection) if name not in existing_channels]
+    st.session_state["channel_names"].extend(new_channel_names)
+
+selected_channel = col4.selectbox("Select a channel", st.session_state["channel_names"], key='selected_channel')
+
+buff1, buff2, buff3, col5 = st.columns([3, 3, 3, 2.75], gap='large')
+
+if col5.button("Migrate to MySQL", key='migrate'):
+
+    conn = mysql.connector.connect(
+        host="localhost",
+        user=user,
+        password=password
+    )
+    cursor = conn.cursor()
+
+    selected_document = fetch_document(collection, selected_channel)
+    if selected_document:
+        migrate_data(conn, cursor, selected_document)
+    
+
+# App Chapter 3
+
+# 3.1 - Defining Function
+
+def execute_query(conn, cursor, query):
+    cursor.execute("USE youtube_db")
+    cursor.execute(query)
+    columns = [desc[0].replace("_", " ").title() for desc in cursor.description]
+    data = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    df = pd.DataFrame(data, columns=columns)
+    return df
+
+
+# 3.2 - Defining SQL Queries
+
+queries = {
+    "Names of all videos and their corresponding channels": """
+        SELECT Videos.video_name, Channels.channel_name
+        FROM Videos
+        INNER JOIN Channels ON Videos.channel_id = Channels.channel_id
+        ORDER BY Channels.channel_name ASC
+    """,
+    "Channels with the most number of videos": """
+        SELECT Channels.channel_name, COUNT(Videos.video_id) AS video_count
+        FROM Channels
+        LEFT JOIN Videos ON Channels.channel_id = Videos.channel_id
+        GROUP BY Channels.channel_name
+        ORDER BY video_count DESC
+        LIMIT 10
+    """,
+    "Top 10 most viewed videos and their respective channels": """
+        SELECT Videos.video_name, Channels.channel_name, Videos.view_count
+        FROM Videos
+        INNER JOIN Channels ON Videos.channel_id = Channels.channel_id
+        ORDER BY Videos.view_count DESC
+        LIMIT 10
+    """,
+    "Number of comments on each video and their corresponding video names": """
+        SELECT Videos.video_name, Videos.comment_count AS comment_count, Channels.channel_name
+        FROM Videos
+        INNER JOIN Channels ON Videos.channel_id = Channels.channel_id
+        ORDER BY comment_count DESC
+    """,
+    "Videos with the highest number of likes and their corresponding channel names": """
+    SELECT Videos.video_name, Channels.channel_name, CAST(Videos.like_count AS SIGNED) AS like_count
+    FROM Videos
+    INNER JOIN Channels ON Videos.channel_id = Channels.channel_id
+    ORDER BY Videos.like_count DESC
+    LIMIT 10
+    """,
+    "Total number of likes and dislikes for each video and their corresponding video names": """
+    SELECT Videos.video_name, Channels.channel_name, CAST(SUM(Videos.like_count) AS SIGNED) AS total_likes, CAST(SUM(Videos.dislike_count) AS SIGNED) AS total_dislikes
+    FROM Videos
+    INNER JOIN Channels ON Videos.channel_id = Channels.channel_id
+    GROUP BY Videos.video_name, Channels.channel_name
+    """,
+    "Total number of views for each channel and their corresponding channel names": """
+    SELECT Channels.channel_name, CAST(SUM(Videos.view_count) AS SIGNED) AS total_views
+    FROM Channels
+    INNER JOIN Videos ON Channels.channel_id = Videos.channel_id
+    GROUP BY Channels.channel_name
+    ORDER BY total_views DESC
+    """,
+    "Channels that published videos in the year 2022": """
+        SELECT Channels.channel_name
+        FROM Channels
+        INNER JOIN Videos ON Channels.channel_id = Videos.channel_id
+        WHERE YEAR(Videos.published_at) = 2022
+        GROUP BY Channels.channel_name
+    """,
+    "Average duration of all videos in each channel and their corresponding channel names": """
+    SELECT Channels.channel_name, Videos.duration
+    FROM Channels
+    INNER JOIN Videos ON Channels.channel_id = Videos.channel_id
+    WHERE Videos.duration IS NOT NULL
+    """,
+    "Videos with the highest number of comments and their corresponding channel names": """
+        SELECT Videos.video_name, Channels.channel_name, Videos.comment_count AS comment_count
+        FROM Videos
+        INNER JOIN Channels ON Videos.channel_id = Channels.channel_id
+        ORDER BY comment_count DESC
+        LIMIT 10
+    """
+}
+
+
+# 3.3 - Streamlit Part
+
+
+add_vertical_space(2)
+
+st.subheader('Basic analysis of channel data from MySQL')
+
+add_vertical_space(2)
+
+col6, buff = st.columns([6, 4])
+
+selected_query = col6.selectbox("Select a query", list(queries.keys()))
+
+if st.button("Run Query", key='run'):
+    conn = mysql.connector.connect(
+        host="localhost",
+        user=user,
+        password=password
+    )
+    cursor = conn.cursor()
+    query = queries[selected_query]
+    df = execute_query(conn, cursor, query)
+    
+    if selected_query == "Average duration of all videos in each channel and their corresponding channel names":
+        
+        df.columns = ['Channel Name', 'Duration']
+        df['Duration'] = pd.to_timedelta(df['Duration'])
+        df['duration_seconds'] = df['Duration'].dt.total_seconds()
+        df = df.groupby('Channel Name').mean().reset_index()
+        df['Duration'] = pd.to_timedelta(df['duration_seconds'], unit='s')
+        df['Duration'] = df['Duration'].dt.floor('s').astype(str).str[-8:]
+        df = df.drop('duration_seconds', axis=1)
+        
+    df.index = df.index + 1 
+    st.dataframe(df, use_container_width=True)
+
 
 # App Chapter 4
 

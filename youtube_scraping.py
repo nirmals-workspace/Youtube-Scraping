@@ -12,6 +12,7 @@ from datetime import datetime
 import plotly.express as px
 import streamlit as st
 import mysql.connector
+import sqlalchemy
 import altair as alt
 import pandas as pd
 import requests
@@ -75,7 +76,7 @@ def get_channel_id(api_key, channel_username):
             q=channel_username,
             type="channel",
             maxResults=1
-        ).execute()
+        ).query()
 
         if 'items' in response and response['items']:
             channel_item = response['items'][0]
@@ -99,7 +100,7 @@ def fetch_video_comments(_youtube, video_id, max_results=3):
             part='snippet',
             videoId=video_id,
             maxResults=max_results
-        ).execute()
+        ).query()
     except HttpError as e:
         if e.resp.status == 403:
             return {}
@@ -135,7 +136,7 @@ def fetch_channel_data(api_key, channel_id):
     try:
         _youtube = build('youtube', 'v3', developerKey=api_key)
 
-        channel_response = _youtube.channels().list(part='snippet, statistics, contentDetails, status', id=channel_id).execute()
+        channel_response = _youtube.channels().list(part='snippet, statistics, contentDetails, status', id=channel_id).query()
         channel_items = channel_response.get('items', [])
         
         if channel_items:
@@ -167,7 +168,7 @@ def fetch_channel_data(api_key, channel_id):
                 channelId=channel_id,
                 maxResults=50,
                 pageToken=next_page_token
-            ).execute()
+            ).query()
 
             playlists.extend(playlists_response.get('items', []))
 
@@ -193,7 +194,7 @@ def fetch_channel_data(api_key, channel_id):
                     playlistId=playlist_id,
                     maxResults=50,
                     pageToken=next_page_token
-                ).execute()
+                ).query()
 
                 videos.extend(playlist_items_response.get('items', []))
 
@@ -211,7 +212,7 @@ def fetch_channel_data(api_key, channel_id):
                 video_response = _youtube.videos().list(
                     part='snippet,contentDetails,statistics',
                     id=video_id
-                ).execute()
+                ).query()
                 video_items = video_response.get('items', [])
 
                 if video_items:
@@ -267,7 +268,7 @@ def fetch_channel_data(api_key, channel_id):
                 maxResults=50,
                 type='video',
                 pageToken=next_page_token
-            ).execute()
+            ).query()
 
             remaining_videos.extend(remaining_videos_response.get('items', []))
 
@@ -285,7 +286,7 @@ def fetch_channel_data(api_key, channel_id):
             video_response = _youtube.videos().list(
                 part='snippet,contentDetails,statistics',
                 id=video_id
-            ).execute()
+            ).query()
             video_items = video_response.get('items', [])
 
             if video_items:
@@ -426,7 +427,7 @@ def fetch_channel_names(_collection):
     channel_names = _collection.distinct("Channel_Details.Channel_Name")
     return channel_names
 
-def create_channels_table(cursor):
+def create_channels_table(conn):
     create_channels_table_query = """
         CREATE TABLE IF NOT EXISTS Channels (
             channel_id VARCHAR(255) PRIMARY KEY,
@@ -437,9 +438,9 @@ def create_channels_table(cursor):
             channel_status VARCHAR(255)
         )
     """
-    cursor.execute(create_channels_table_query)
+    conn.query(create_channels_table_query)
 
-def create_playlists_table(cursor):
+def create_playlists_table(conn):
     create_playlists_table_query = """
         CREATE TABLE IF NOT EXISTS Playlists (
             channel_id VARCHAR(255),
@@ -449,9 +450,9 @@ def create_playlists_table(cursor):
             FOREIGN KEY (channel_id) REFERENCES Channels(channel_id)
         )
     """
-    cursor.execute(create_playlists_table_query)
+    conn.query(create_playlists_table_query)
 
-def create_videos_table(cursor):
+def create_videos_table(conn):
     create_videos_table_query = """
         CREATE TABLE IF NOT EXISTS Videos (
             video_order VARCHAR(10),
@@ -473,9 +474,9 @@ def create_videos_table(cursor):
             FOREIGN KEY (channel_id, playlist_id) REFERENCES Playlists(channel_id, playlist_id)
         )
     """
-    cursor.execute(create_videos_table_query)
+    conn.query(create_videos_table_query)
 
-def create_comments_table(cursor):
+def create_comments_table(conn):
     create_comments_table_query = """
         CREATE TABLE IF NOT EXISTS Comments (
             channel_id VARCHAR(255),
@@ -490,22 +491,22 @@ def create_comments_table(cursor):
             FOREIGN KEY (video_id) REFERENCES Videos(video_id)
         )
     """
-    cursor.execute(create_comments_table_query)
+    conn.query(create_comments_table_query)
 
-def migrate_data(conn, cursor, document):
+def migrate_data(conn, document):
     
     if document['Video_Details'] == {}:
         st.error("Channel has no videos and can't be migrated")
         return None
     else:
         
-        cursor.execute("CREATE DATABASE IF NOT EXISTS youtube_db")
-        cursor.execute("USE youtube_db")
+        conn.query("CREATE DATABASE IF NOT EXISTS youtube_db")
+        conn.query("USE youtube_db")
         
-        create_channels_table(cursor)
-        create_playlists_table(cursor)
-        create_videos_table(cursor)
-        create_comments_table(cursor)
+        create_channels_table(conn)
+        create_playlists_table(conn)
+        create_videos_table(conn)
+        create_comments_table(conn)
         
         channel_id = document["Channel_Details"]["Channel_Id"]
         channel_name = document["Channel_Details"]["Channel_Name"]
@@ -523,7 +524,7 @@ def migrate_data(conn, cursor, document):
         """
         channel_data = (channel_id, channel_name, subscription_count,
                         channel_views, channel_description, channel_status)
-        cursor.execute(insert_channel_query, channel_data)
+        conn.query(insert_channel_query, channel_data)
 
         video_details = document["Video_Details"]
 
@@ -537,8 +538,8 @@ def migrate_data(conn, cursor, document):
                 SELECT * FROM Playlists
                 WHERE channel_id = %s AND playlist_id = %s
             """
-            cursor.execute(select_playlist_query, (channel_id, playlist_id))
-            existing_playlist = cursor.fetchone()
+            conn.query(select_playlist_query, (channel_id, playlist_id))
+            existing_playlist = conn.fetchone()
 
             if not existing_playlist:
                 insert_playlist_query = """
@@ -546,7 +547,7 @@ def migrate_data(conn, cursor, document):
                     VALUES (%s, %s, %s)
                 """
                 playlist_data = (channel_id, playlist_id, playlist_name)
-                cursor.execute(insert_playlist_query, playlist_data)
+                conn.query(insert_playlist_query, playlist_data)
 
             video_order = video_key
             video_id = video_values["Video_Id"]
@@ -573,7 +574,7 @@ def migrate_data(conn, cursor, document):
             video_data = (video_order, channel_id, playlist_id, video_id, video_name, video_description,
                           published_at, view_count, like_count, dislike_count,
                           favorite_count, comment_count, duration, thumbnail, caption_status)
-            cursor.execute(insert_video_query, video_data)
+            conn.query(insert_video_query, video_data)
                                     
             comments_data = video_values.get("Comments", {})
             
@@ -595,12 +596,11 @@ def migrate_data(conn, cursor, document):
                         channel_id, playlist_id, video_id, comment_id,
                         comment_text, comment_author, comment_published_at
                         )
-                cursor.execute(insert_comment_query, comment_data)
+                conn.query(insert_comment_query, comment_data)
 
         conn.commit()
-        cursor.close()
         conn.close()
-        
+                
         st.success("Data successfully migrated to MySQL")
 
 
@@ -613,10 +613,6 @@ st.subheader('Migrate data from Atlas to MySQL')
 
 add_vertical_space(2)
 
-col2, col3, col4 = st.columns([4, 4, 6])
-
-user = col2.text_input("Enter your MySQL Username", value='root')
-password = col3.text_input("Enter Password", value='Rooting@7781', type='password')
 
 if "channel_names" not in st.session_state:
     channel_names = fetch_channel_names(collection)
@@ -630,34 +626,26 @@ if existing_channel_count != new_channel_count:
     new_channel_names = [name for name in fetch_channel_names(collection) if name not in existing_channels]
     st.session_state["channel_names"].extend(new_channel_names)
 
-selected_channel = col4.selectbox("Select a channel", st.session_state["channel_names"], key='selected_channel')
+selected_channel = st.selectbox("Select a channel", st.session_state["channel_names"], key='selected_channel')
 
-buff1, buff2, buff3, col5 = st.columns([3, 3, 3, 2.75], gap='large')
-
-if col5.button("Migrate to MySQL", key='migrate'):
-
-    conn = mysql.connector.connect(
-        host="localhost",
-        user=user,
-        password=password
-    )
-    cursor = conn.cursor()
+if st.button("Migrate to MySQL", key='migrate'):
+    
+    conn = st.experimental_connection('mysql', type='sql')
 
     selected_document = fetch_document(collection, selected_channel)
     if selected_document:
-        migrate_data(conn, cursor, selected_document)
+        migrate_data(conn, selected_document)
     
 
 # App Chapter 3
 
 # 3.1 - Defining Function
 
-def execute_query(conn, cursor, query):
-    cursor.execute("USE youtube_db")
-    cursor.execute(query)
-    columns = [desc[0].replace("_", " ").title() for desc in cursor.description]
-    data = cursor.fetchall()
-    cursor.close()
+def execute_query(conn, query):
+    conn.query("USE youtube_db")
+    conn.query(query)
+    columns = [desc[0].replace("_", " ").title() for desc in conn.description]
+    data = conn.fetchall()
     conn.close()
     df = pd.DataFrame(data, columns=columns)
     return df
@@ -750,14 +738,9 @@ col6, buff = st.columns([6, 4])
 selected_query = col6.selectbox("Select a query", list(queries.keys()))
 
 if st.button("Run Query", key='run'):
-    conn = mysql.connector.connect(
-        host="localhost",
-        user=user,
-        password=password
-    )
-    cursor = conn.cursor()
+    conn = st.experimental_connection('mysql', type='sql')
     query = queries[selected_query]
-    df = execute_query(conn, cursor, query)
+    df = execute_query(conn, query)
     
     if selected_query == "Average duration of all videos in each channel and their corresponding channel names":
         

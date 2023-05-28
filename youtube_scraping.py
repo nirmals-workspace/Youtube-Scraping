@@ -719,7 +719,7 @@ elif selected_viz == 'Histogram' and viz_button:
     fig_hist = go.Figure(data=[go.Histogram(x=durations_min, xbins=dict(start=bins[0], end=bins[-1], size=(bins[-1]-bins[0])/num_bins))])
     fig_hist.update_layout(
         xaxis_title='Duration (in minutes)',
-        yaxis_title='Count',
+        yaxis_title='Number of Videos',
         showlegend=False,
         height=500,
         width=800

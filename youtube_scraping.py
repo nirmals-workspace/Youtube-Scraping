@@ -735,4 +735,4 @@ elif selected_viz == 'Histogram' and viz_button:
     
 with side_bar:
     add_vertical_space(1)
-    button('nirmalkumar7781', emoji='🕮', text = 'Buy me a book', floating = False)
+    button('nirmalkumar.datageek', emoji='🕮', text = 'Buy me a book', floating = False)

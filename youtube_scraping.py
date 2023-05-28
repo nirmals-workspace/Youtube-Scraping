@@ -410,8 +410,11 @@ add_vertical_space(2)
 # 1.4 - Channel Username Reference
 
 with st.expander('Wait! But where can you get channel username from ?'):
-    st.image(r'Related Images and Videos/Username.png')
-
+    
+    image = st.image(r'Related Images and Videos/Username.png')
+    
+    if 'image' not in st.session_state:
+        st.session_state["image"] = image
 
 # App Chapter 2
 

@@ -391,7 +391,7 @@ if but.button('Fetch and Push into MongoDB Atlas', key = 'push'):
     else:
         collection.insert_one(channel_data)
         
-    st.write(f"Data related to the channel - '{st.session_state.channel_name}' pushed successfully into MongoDB Atlas...")
+    st.write(f"Data related to the channel - '{df['Channel_Name']}' pushed successfully into MongoDB Atlas...")
 
 
 # 1.3 - Youtube reference
@@ -425,9 +425,20 @@ def fetch_channel_names(_collection):
     channel_names = _collection.distinct("Channel_Details.Channel_Name")
     return channel_names
 
-# App Chapter 4
+if "channel_names" not in st.session_state:
+    channel_names = fetch_channel_names(collection)
+    st.session_state["channel_names"] = channel_names
+    
+existing_channel_count = len(st.session_state["channel_names"])
+new_channel_count = collection.estimated_document_count()
 
-# 4.1 - Defining Function
+if existing_channel_count != new_channel_count:
+    existing_channels = set(st.session_state["channel_names"])
+    new_channel_names = [name for name in fetch_channel_names(collection) if name not in existing_channels]
+    st.session_state["channel_names"].extend(new_channel_names)
+
+
+# 2.1 - Defining Function
 
 def fetch_video_dataframe(document):
     
@@ -453,7 +464,7 @@ def fetch_video_dataframe(document):
     return video_df
 
 
-# 4.2 - Streamlit Part
+# 2.2 - Streamlit Part
 
 
 add_vertical_space(2)
@@ -530,9 +541,9 @@ else:
     st.write("Select a channel.")
 
 
-# App Chapter 5
+# App Chapter 3
 
-# 5.1 - Streamlit Part and Visualizations
+# 3.1 - Streamlit Part and Visualizations
 
 
 side_bar = st.sidebar

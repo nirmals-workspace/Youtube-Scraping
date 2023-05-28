@@ -198,7 +198,7 @@ These features collectively allow users to fetch, store, analyze, and visualize 
     2. Explore the different features and functionalities available on each section of the app.
     3. Utilize the user-friendly interface to provide inputs, such as channel name and visualization selection, and obtain insightful data analysis and visualizations.
 
-Developer Guide:
+## Developer Guide:
 To run the app, follow these steps:
 
     1. Clone the repository to your local machine using the command: `git clone [https://github.com/Nirmal-Data-Scientist/Youtube_Data_Harvesting.git]`.

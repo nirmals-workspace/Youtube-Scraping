@@ -1,5 +1,5 @@
 # YouTube Data Harvesting and Warehousing
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://nirmal-data-scientist-youtube-data-harvesting.streamlit.app/)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://youtube-data-harvesting.streamlit.app/)
 
 This web app is designed to fetch data from YouTube using their YouTube's Data API v3 based on user input for a channel username. The fetched data is stored in my personal MongoDB Atlas Database and provides facilities for users to migrate the channel data to their local MySQL database. The project also includes custom-made queries for basic data analysis and visualization using Streamlit.
 
@@ -253,7 +253,7 @@ These applications demonstrate how the app can be utilized by content creators, 
 
 ## Streamlit web URL
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://nirmal-data-scientist-youtube-data-harvesting.streamlit.app/)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://youtube-data-harvesting.streamlit.app/)
 
 ## Disclaimer
 This application is intended for educational and research purposes only and should not be used for any commercial or unethical activities.

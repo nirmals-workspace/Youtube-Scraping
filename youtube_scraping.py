@@ -392,7 +392,7 @@ if but.button('Fetch and Push into MongoDB Atlas', key = 'push'):
     else:
         collection.insert_one(channel_data)
         
-    st.write(f"Data related to the channel - '{df['Channel_Name']}' pushed successfully into MongoDB Atlas...")
+    st.write(f"Data related to the channel - '{channel_details['Channel_Name']}' pushed successfully into MongoDB Atlas...")
 
 
 # 1.3 - Youtube reference

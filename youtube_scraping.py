@@ -729,8 +729,9 @@ elif selected_viz == 'Histogram' and viz_button:
     fig_hist.update_traces(hovertemplate='Duration: %{x:.0f} minutes<br>Count: %{y}')
     fig_hist.update_xaxes(ticktext=bin_labels, tickvals=bins[:-1])
 
-
     st.plotly_chart(fig_hist, use_container_width = True)
+
+
 
 # Miscellaneous
     

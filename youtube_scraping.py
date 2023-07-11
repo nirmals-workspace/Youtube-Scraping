@@ -17,6 +17,7 @@ import requests
 import isodate
 import json
 import math
+import os
 
 
 # Page Configuration
@@ -35,14 +36,14 @@ with lottie:
 
 # MongoDB connection
 
-mongo_client = MongoClient(st.secrets['mongo_db']['URI'])
+mongo_client = MongoClient(os.environ['mongo_db_URI'])
 db = mongo_client['youtube_db']
 collection = db['youtube_collection']
 
 
 # Loading API
 
-api_key = st.secrets['api_key']['key']
+api_key = os.environ['api_key']
 
 
 # App Chapter 1

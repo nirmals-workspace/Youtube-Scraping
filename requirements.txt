@@ -1,7 +1,7 @@
 altair==4.2.2
 pandas==2.0.1
 plotly==5.14.1
-pillow==9.5.0
+Pillow==9.3.0
 pymongo==4.3.3
 isodate==0.6.1
 matplotlib==3.6.3

@@ -18,6 +18,9 @@ import isodate
 import json
 import math
 import os
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 # Page Configuration
@@ -49,14 +52,14 @@ with lottie:
 
 # MongoDB connection
 
-mongo_client = MongoClient(os.environ['mongo_db_URI'])
+mongo_client = MongoClient(os.environ.get('mongo_db_URI'))
 db = mongo_client['youtube_db']
 collection = db['youtube_collection']
 
 
 # Loading API
 
-api_key = os.environ['api_key']
+api_key = os.environ.get('api_key')
 
 
 # App Chapter 1
@@ -92,18 +95,33 @@ def get_channel_id(api_key, channel_username):
 
         if 'items' in response and response['items']:
             channel_item = response['items'][0]
-            return channel_item['snippet']['channelId']
-        else:
-            page_source = requests.get(f'https://www.youtube.com/{channel_username}').text
-            channel_id_start_index = page_source.find('"channelId":"') + len('"channelId":"')
-            channel_id_end_index = page_source.find('"', channel_id_start_index)
-            channel_id = page_source[channel_id_start_index:channel_id_end_index]
+            channel_id = channel_item['snippet']['channelId']
+            logging.info(f"Channel ID found using API: {channel_id}")
             return channel_id
+        else:
+            logging.warning(f"No channel found using API for username: {channel_username}.  Attempting HTML scraping.")
+            try:
+                page_source = requests.get(f'https://www.youtube.com/{channel_username}', timeout=10).text  # Added timeout
+                channel_id_start_index = page_source.find('"channelId":"') + len('"channelId":"')
+                channel_id_end_index = page_source.find('"', channel_id_start_index)
+                channel_id = page_source[channel_id_start_index:channel_id_end_index]
+                logging.info(f"Channel ID found using HTML scraping: {channel_id}")
+                return channel_id
+            except Exception as scrape_error:
+                logging.error(f"HTML scraping failed: {scrape_error}")
+                raise Exception(f"Failed to find Channel ID using HTML scraping. {scrape_error}")
+
     except HttpError as e:
         if e.resp.status == 403 and b"quotaExceeded" in e.content:
-            st.write("API Quota exhausted... Try using after 24 hours")
+            st.error("API Quota exhausted... Try again after 24 hours.")
+            logging.error("API Quota exhausted.") # Use logging to record the exhaustion
         else:
-            raise Exception('Channel ID not found.')
+            logging.error(f"API error: {e}") # Log the full API error
+            raise Exception(f"YouTube API error: {e}")
+
+    except Exception as e:
+        logging.error(f"An unexpected error occurred: {e}")
+        raise Exception(f"An unexpected error occurred while fetching channel ID: {e}")  # Re-raise
 
 @st.cache_data                
 def fetch_video_comments(_youtube, video_id, max_results=3):
